@@ -1,0 +1,165 @@
+### Variables
+@baseUrl = http://localhost:3000
+@adminKey = your-secret-admin-key-here
+
+### RecipientIds from seeds
+@recipientId1 = 550e8400-e29b-41d4-a716-446655440001
+@recipientId2 = 550e8400-e29b-41d4-a716-446655440002
+@recipientId3 = 550e8400-e29b-41d4-a716-446655440003
+
+### Test Author IDs
+@authorId1 = 550e8400-e29b-41d4-a716-446655440020
+@authorId2 = 550e8400-e29b-41d4-a716-446655440021
+
+#######################################
+# COMMANDS
+#######################################
+
+### 1. Create Review
+POST {{baseUrl}}/reviews
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientId1}}",
+  "authorId": "{{authorId1}}",
+  "rating": 5,
+  "content": "Отличный продавец! Быстрая доставка, качественный товар."
+}
+
+### 1.1 Create Review (another one for testing)
+POST {{baseUrl}}/reviews
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientId1}}",
+  "authorId": "{{authorId2}}",
+  "rating": 4,
+  "content": "Хороший продавец, рекомендую."
+}
+
+### 2. Update Review (replace {id} with actual review ID from create response)
+PATCH {{baseUrl}}/reviews/{id}
+Content-Type: application/json
+
+{
+  "rating": 4,
+  "content": "Обновленный текст отзыва"
+}
+
+### 3. Delete Review (replace {id} with actual review ID)
+DELETE {{baseUrl}}/reviews/{id}
+
+#######################################
+# QUERIES
+#######################################
+
+### 4. Get Seller Aggregate - Recipient 1 (3 reviews from seeds: 5, 4, 5)
+GET {{baseUrl}}/sellers/{{recipientId1}}/reviews/aggregate
+
+### 4.1 Get Seller Aggregate - Recipient 2 (2 reviews from seeds: 3, 2)
+GET {{baseUrl}}/sellers/{{recipientId2}}/reviews/aggregate
+
+### 4.2 Get Seller Aggregate - Recipient 3 (5 reviews from seeds: 5, 4, 5, 1, 5)
+GET {{baseUrl}}/sellers/{{recipientId3}}/reviews/aggregate
+
+### 4.3 Get Seller Aggregate - Non-existent seller (should return empty)
+GET {{baseUrl}}/sellers/00000000-0000-0000-0000-000000000000/reviews/aggregate
+
+#######################################
+# ADMIN ENDPOINTS
+#######################################
+
+### 5. Admin: Rebuild All Aggregates
+POST {{baseUrl}}/admin/reviews-aggregate/rebuild
+x-admin-key: {{adminKey}}
+
+### 6. Admin: Rebuild Aggregate for Specific Recipient
+POST {{baseUrl}}/admin/reviews-aggregate/rebuild/{{recipientId1}}
+x-admin-key: {{adminKey}}
+
+### 6.1 Admin: Rebuild Aggregate for Recipient 2
+POST {{baseUrl}}/admin/reviews-aggregate/rebuild/{{recipientId2}}
+x-admin-key: {{adminKey}}
+
+#######################################
+# FULL TEST SCENARIO
+#######################################
+
+### Step 1: Create a new review
+# @name createReview
+POST {{baseUrl}}/reviews
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientId1}}",
+  "authorId": "550e8400-e29b-41d4-a716-446655440099",
+  "rating": 5,
+  "content": "Тестовый отзыв для проверки агрегации"
+}
+
+### Step 2: Get aggregate after creation (check that reviewCount increased)
+GET {{baseUrl}}/sellers/{{recipientId1}}/reviews/aggregate
+
+### Step 3: Update the review (use ID from createReview response)
+# Replace {id} with actual ID from Step 1 response
+PATCH {{baseUrl}}/reviews/{id}
+Content-Type: application/json
+
+{
+  "rating": 4,
+  "content": "Обновленный тестовый отзыв"
+}
+
+### Step 4: Get aggregate after update (check that avgRating changed)
+GET {{baseUrl}}/sellers/{{recipientId1}}/reviews/aggregate
+
+### Step 5: Delete the review (use ID from createReview response)
+# Replace {id} with actual ID from Step 1 response
+DELETE {{baseUrl}}/reviews/{id}
+
+### Step 6: Get aggregate after delete (check that reviewCount decreased)
+GET {{baseUrl}}/sellers/{{recipientId1}}/reviews/aggregate
+
+#######################################
+# ERROR CASES
+#######################################
+
+### Error: Create review with same recipientId and authorId (should fail)
+POST {{baseUrl}}/reviews
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientId1}}",
+  "authorId": "{{recipientId1}}",
+  "rating": 5,
+  "content": "This should fail"
+}
+
+### Error: Create review with invalid rating (should fail)
+POST {{baseUrl}}/reviews
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientId1}}",
+  "authorId": "{{authorId1}}",
+  "rating": 6,
+  "content": "Invalid rating"
+}
+
+### Error: Update non-existent review (should return 404)
+PATCH {{baseUrl}}/reviews/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+
+{
+  "rating": 3
+}
+
+### Error: Delete non-existent review (should return 404)
+DELETE {{baseUrl}}/reviews/00000000-0000-0000-0000-000000000000
+
+### Error: Admin endpoint without key (should return 401)
+POST {{baseUrl}}/admin/reviews-aggregate/rebuild
+
+### Error: Admin endpoint with wrong key (should return 401)
+POST {{baseUrl}}/admin/reviews-aggregate/rebuild
+x-admin-key: wrong-key
