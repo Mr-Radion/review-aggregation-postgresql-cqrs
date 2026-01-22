@@ -4,27 +4,62 @@ import { SellerReviewAggEntity } from '../entities/seller-review-agg.entity';
 
 @Injectable()
 export class ReviewAggWriterService {
-  private async getOrCreate(
+  private assertRating(rating: number) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new Error(`Invalid rating: ${rating}`);
+    }
+  }
+
+  private starsDelta(rating: number, delta: number) {
+    return {
+      stars1: rating === 1 ? delta : 0,
+      stars2: rating === 2 ? delta : 0,
+      stars3: rating === 3 ? delta : 0,
+      stars4: rating === 4 ? delta : 0,
+      stars5: rating === 5 ? delta : 0,
+    };
+  }
+
+  /**
+   * Атомарный UPSERT через PostgreSQL ON CONFLICT.
+   * Защита от race condition: при одновременных запросах PostgreSQL сериализует конфликты,
+   * все дельты прибавляются корректно без lost updates.
+   */
+  private async applyDelta(
     manager: EntityManager,
     recipientId: string,
-  ): Promise<SellerReviewAggEntity> {
-    const repo = manager.getRepository(SellerReviewAggEntity);
-
-    let agg = await repo.findOne({
-      where: { recipientId },
-      lock: { mode: 'pessimistic_write' },
-    });
-
-    if (!agg) {
-      agg = repo.create({
+    deltaCount: number,
+    deltaSum: number,
+    stars: {
+      stars1: number;
+      stars2: number;
+      stars3: number;
+      stars4: number;
+      stars5: number;
+    },
+  ) {
+    await manager
+      .createQueryBuilder()
+      .insert()
+      .into(SellerReviewAggEntity)
+      .values({
         recipientId,
-        reviewCount: 0,
-        ratingSum: 0,
-        ratingDistribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
-      });
-    }
-
-    return agg;
+        reviewCount: deltaCount,
+        ratingSum: deltaSum,
+        ...stars,
+      })
+      .onConflict(
+        `("recipient_id") DO UPDATE SET
+          review_count = seller_review_agg.review_count + EXCLUDED.review_count,
+          rating_sum   = seller_review_agg.rating_sum   + EXCLUDED.rating_sum,
+          stars_1      = seller_review_agg.stars_1      + EXCLUDED.stars_1,
+          stars_2      = seller_review_agg.stars_2      + EXCLUDED.stars_2,
+          stars_3      = seller_review_agg.stars_3      + EXCLUDED.stars_3,
+          stars_4      = seller_review_agg.stars_4      + EXCLUDED.stars_4,
+          stars_5      = seller_review_agg.stars_5      + EXCLUDED.stars_5
+        `,
+      )
+      .execute();
   }
 
   async onCreate(
@@ -32,15 +67,31 @@ export class ReviewAggWriterService {
     recipientId: string,
     rating: number,
   ) {
-    const repo = manager.getRepository(SellerReviewAggEntity);
-    const agg = await this.getOrCreate(manager, recipientId);
+    this.assertRating(rating);
 
-    agg.reviewCount += 1;
-    agg.ratingSum += rating;
-    const key = String(rating);
-    agg.ratingDistribution[key] = (agg.ratingDistribution[key] ?? 0) + 1;
+    await this.applyDelta(
+      manager,
+      recipientId,
+      +1,
+      +rating,
+      this.starsDelta(rating, +1),
+    );
+  }
 
-    await repo.save(agg);
+  async onDelete(
+    manager: EntityManager,
+    recipientId: string,
+    rating: number,
+  ) {
+    this.assertRating(rating);
+
+    await this.applyDelta(
+      manager,
+      recipientId,
+      -1,
+      -rating,
+      this.starsDelta(rating, -1),
+    );
   }
 
   async onRatingChange(
@@ -49,38 +100,24 @@ export class ReviewAggWriterService {
     oldRating: number,
     newRating: number,
   ) {
-    const repo = manager.getRepository(SellerReviewAggEntity);
-    const agg = await this.getOrCreate(manager, recipientId);
+    this.assertRating(oldRating);
+    this.assertRating(newRating);
 
-    agg.ratingSum += newRating - oldRating;
+    const decOld = this.starsDelta(oldRating, -1);
+    const incNew = this.starsDelta(newRating, +1);
 
-    const oldKey = String(oldRating);
-    const newKey = String(newRating);
-    agg.ratingDistribution[oldKey] = Math.max(
+    await this.applyDelta(
+      manager,
+      recipientId,
       0,
-      (agg.ratingDistribution[oldKey] ?? 0) - 1,
+      newRating - oldRating,
+      {
+        stars1: decOld.stars1 + incNew.stars1,
+        stars2: decOld.stars2 + incNew.stars2,
+        stars3: decOld.stars3 + incNew.stars3,
+        stars4: decOld.stars4 + incNew.stars4,
+        stars5: decOld.stars5 + incNew.stars5,
+      },
     );
-    agg.ratingDistribution[newKey] = (agg.ratingDistribution[newKey] ?? 0) + 1;
-
-    await repo.save(agg);
-  }
-
-  async onDelete(
-    manager: EntityManager,
-    recipientId: string,
-    rating: number,
-  ) {
-    const repo = manager.getRepository(SellerReviewAggEntity);
-    const agg = await this.getOrCreate(manager, recipientId);
-
-    agg.reviewCount = Math.max(0, agg.reviewCount - 1);
-    agg.ratingSum = Math.max(0, agg.ratingSum - rating);
-    const key = String(rating);
-    agg.ratingDistribution[key] = Math.max(
-      0,
-      (agg.ratingDistribution[key] ?? 0) - 1,
-    );
-
-    await repo.save(agg);
   }
 }

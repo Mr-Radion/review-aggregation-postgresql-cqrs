@@ -6,27 +6,34 @@ import {
   Check,
 } from 'typeorm';
 
-export type RatingDistribution = Record<string, number>; // keys: "1".."5"
-
-@Entity('seller_review_agg')
+@Entity({ name: 'seller_review_agg' })
 @Check(`"reviewCount" >= 0`)
 @Check(`"ratingSum" >= 0`)
 export class SellerReviewAggEntity {
-  @PrimaryColumn('uuid')
+  @PrimaryColumn('uuid', { name: 'recipient_id' })
   recipientId: string;
 
-  @Column({ type: 'int', default: 0 })
+  @Column('int', { name: 'review_count', default: 0 })
   reviewCount: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column('int', { name: 'rating_sum', default: 0 })
   ratingSum: number;
 
-  @Column({
-    type: 'jsonb',
-    default: () => `'{"1":0,"2":0,"3":0,"4":0,"5":0}'`,
-  })
-  ratingDistribution: RatingDistribution;
+  @Column('int', { name: 'stars_1', default: 0 })
+  stars1: number;
 
-  @UpdateDateColumn({ type: 'timestamptz' })
+  @Column('int', { name: 'stars_2', default: 0 })
+  stars2: number;
+
+  @Column('int', { name: 'stars_3', default: 0 })
+  stars3: number;
+
+  @Column('int', { name: 'stars_4', default: 0 })
+  stars4: number;
+
+  @Column('int', { name: 'stars_5', default: 0 })
+  stars5: number;
+
+  @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
   updatedAt: Date;
 }

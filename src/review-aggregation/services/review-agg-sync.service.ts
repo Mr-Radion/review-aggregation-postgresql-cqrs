@@ -37,13 +37,16 @@ export class ReviewAggSyncService {
         select: ['rating'],
       });
 
-      const distribution: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+      const stars = { stars1: 0, stars2: 0, stars3: 0, stars4: 0, stars5: 0 };
       let sum = 0;
 
       for (const r of reviews) {
-        const key = String(r.rating);
-        distribution[key]++;
         sum += r.rating;
+        if (r.rating === 1) stars.stars1++;
+        else if (r.rating === 2) stars.stars2++;
+        else if (r.rating === 3) stars.stars3++;
+        else if (r.rating === 4) stars.stars4++;
+        else if (r.rating === 5) stars.stars5++;
       }
 
       const existing = await aggRepo.findOne({ where: { recipientId } });
@@ -51,14 +54,18 @@ export class ReviewAggSyncService {
       if (existing) {
         existing.reviewCount = reviews.length;
         existing.ratingSum = sum;
-        existing.ratingDistribution = distribution;
+        existing.stars1 = stars.stars1;
+        existing.stars2 = stars.stars2;
+        existing.stars3 = stars.stars3;
+        existing.stars4 = stars.stars4;
+        existing.stars5 = stars.stars5;
         await aggRepo.save(existing);
       } else {
         const agg = aggRepo.create({
           recipientId,
           reviewCount: reviews.length,
           ratingSum: sum,
-          ratingDistribution: distribution,
+          ...stars,
         });
         await aggRepo.save(agg);
       }

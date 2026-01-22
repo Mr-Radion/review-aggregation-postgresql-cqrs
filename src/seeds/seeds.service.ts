@@ -12,7 +12,6 @@ export class SeedsService {
     await queryRunner.connect();
 
     try {
-      // Проверяем, есть ли уже данные
       const reviewRepo = this.dataSource.getRepository(ReviewEntity);
       const existingReviews = await reviewRepo.count();
 
@@ -21,7 +20,6 @@ export class SeedsService {
         return;
       }
 
-      // Создаем тестовые данные
       const reviews = [
         {
           recipientId: '550e8400-e29b-41d4-a716-446655440001',
@@ -85,32 +83,33 @@ export class SeedsService {
         },
       ];
 
-      // Вставляем отзывы
       const reviewEntities = reviews.map((review) => reviewRepo.create(review));
       await reviewRepo.save(reviewEntities);
 
       console.log(`✅ Seeded ${reviews.length} reviews`);
 
-      // Пересчитываем агрегаты для всех продавцов
       const aggRepo = this.dataSource.getRepository(SellerReviewAggEntity);
       const uniqueRecipients = [...new Set(reviews.map((r) => r.recipientId))];
 
       for (const recipientId of uniqueRecipients) {
         const recipientReviews = reviews.filter((r) => r.recipientId === recipientId);
-        const distribution: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+        const stars = { stars1: 0, stars2: 0, stars3: 0, stars4: 0, stars5: 0 };
         let sum = 0;
 
         for (const review of recipientReviews) {
-          const key = String(review.rating);
-          distribution[key]++;
           sum += review.rating;
+          if (review.rating === 1) stars.stars1++;
+          else if (review.rating === 2) stars.stars2++;
+          else if (review.rating === 3) stars.stars3++;
+          else if (review.rating === 4) stars.stars4++;
+          else if (review.rating === 5) stars.stars5++;
         }
 
         const agg = aggRepo.create({
           recipientId,
           reviewCount: recipientReviews.length,
           ratingSum: sum,
-          ratingDistribution: distribution,
+          ...stars,
         });
 
         await aggRepo.save(agg);

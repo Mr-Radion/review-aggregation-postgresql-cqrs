@@ -14,6 +14,12 @@ export class ReviewsCommandService {
     private readonly aggCache: ReviewAggCacheService,
   ) {}
 
+  /**
+   * Создание отзыва. Защита от race condition:
+   * - При одновременном создании нескольких отзывов для одного seller
+   * - PostgreSQL атомарно обрабатывает конфликты через ON CONFLICT DO UPDATE
+   * - Все дельты прибавляются корректно без lost updates
+   */
   async create(dto: CreateReviewDto) {
     if (dto.recipientId === dto.authorId) {
       throw new BadRequestException('recipientId cannot equal authorId');

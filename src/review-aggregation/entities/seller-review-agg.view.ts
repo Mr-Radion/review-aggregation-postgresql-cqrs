@@ -5,18 +5,22 @@ import { DataSource, ViewColumn, ViewEntity } from 'typeorm';
   expression: (ds: DataSource) =>
     ds
       .createQueryBuilder()
-      .select('a."recipientId"', 'recipientId')
-      .addSelect('a."reviewCount"', 'reviewCount')
+      .select('a."recipient_id"', 'recipientId')
+      .addSelect('a."review_count"', 'reviewCount')
       .addSelect(
         `CASE 
-           WHEN a."reviewCount" > 0 
-           THEN ROUND((a."ratingSum"::numeric / a."reviewCount")::numeric, 2) 
+           WHEN a."review_count" > 0 
+           THEN ROUND((a."rating_sum"::numeric / a."review_count")::numeric, 2) 
            ELSE NULL 
          END`,
         'avgRating',
       )
-      .addSelect('a."ratingDistribution"', 'ratingDistribution')
-      .addSelect('a."updatedAt"', 'updatedAt')
+      .addSelect('a."stars_1"', 'stars1')
+      .addSelect('a."stars_2"', 'stars2')
+      .addSelect('a."stars_3"', 'stars3')
+      .addSelect('a."stars_4"', 'stars4')
+      .addSelect('a."stars_5"', 'stars5')
+      .addSelect('a."updated_at"', 'updatedAt')
       .from('seller_review_agg', 'a'),
 })
 export class SellerReviewAggView {
@@ -30,7 +34,19 @@ export class SellerReviewAggView {
   avgRating: string | null;
 
   @ViewColumn()
-  ratingDistribution: Record<string, number>;
+  stars1: number;
+
+  @ViewColumn()
+  stars2: number;
+
+  @ViewColumn()
+  stars3: number;
+
+  @ViewColumn()
+  stars4: number;
+
+  @ViewColumn()
+  stars5: number;
 
   @ViewColumn()
   updatedAt: Date;

@@ -7,7 +7,13 @@ export class ReviewAggregateMapper {
       recipientId: view.recipientId,
       reviewCount: view.reviewCount,
       avgRating: view.avgRating ? Number(view.avgRating) : null,
-      ratings: view.ratingDistribution ?? {},
+      ratings: {
+        '1': view.stars1 ?? 0,
+        '2': view.stars2 ?? 0,
+        '3': view.stars3 ?? 0,
+        '4': view.stars4 ?? 0,
+        '5': view.stars5 ?? 0,
+      },
       updatedAt: view.updatedAt?.toISOString?.() ?? new Date().toISOString(),
     };
   }
